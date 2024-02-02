@@ -260,10 +260,10 @@ Try {
         }
 
         Show-InstallationProgress -StatusMessage "Launching steamcmd and installing PalWorld Server.  Do not exit out of the steamcmd window if one appears."
-        Execute-Process -Path "$directoryPath\steamcmd.exe" -Parameters "+login anonymous +app_update 2394010 validate +quit" -WindowStyle 'Hidden'
+        Execute-Process -Path "$directoryPath\steamcmd.exe" -Parameters "+login anonymous +app_update 2394010 validate +quit" -WindowStyle 'Hidden' -IgnoreExitCodes "*"
 
         Show-InstallationProgress -StatusMessage "Start PalWorld Server First Launch Tasks. Do not close any windows during this process."
-        Execute-Process -Path "$palServerPath\PalServer.exe" -NoWait
+        Execute-Process -Path "$palServerPath\PalServer.exe" -NoWait -IgnoreExitCodes "*"
 
         While (!(Test-Path -Path "$palServerPath\Pal\Saved\Config\WindowsServer\PalWorldSettings.ini")) {
             Show-InstallationProgress -StatusMessage "Still waiting for PalWorld Server First Launch Tasks to finish.  Please wait."
@@ -287,6 +287,9 @@ Try {
 
         ## <Perform Post-Installation tasks here>
 
+        $palServerPath = Join-Path -Path $directoryPath -ChildPath "steamapps\common\PalServer"
+        $palSettingsPath = Join-Path -Path $palServerPath -ChildPath "Pal\Saved\Config\WindowsServer\PalWorldSettings.ini"
+
         Show-InstallationProgress -StatusMessage "Copying config file..."
         Copy-Item -Path "$dirSupportFiles\DefaultPalWorldSettings.ini" -Destination "$palSettingsPath" -Force
 
@@ -301,8 +304,11 @@ Try {
             $fileContent = $fileContent -replace $placeholder, $placeholderValues[$placeholder]
         }
 
+        # Save the updated content back to the INI file
+        $fileContent | Set-Content -Path $palSettingsPath
+       
         Show-InstallationProgress -StatusMessage "Launching Arrcon and creating a save for your server..."
-        Execute-Process -Path "$arrconDirectoryPath\ARRCON.exe" -Parameters "-H $publicIP -P 25575 -p $adminPassword --save-host $serverName" -Wait
+        Execute-Process -Path "$arrconDirectoryPath\ARRCON.exe" -Parameters "-H $publicIP -P 25575 -p $adminPassword --save-host $serverName" -Wait -IgnoreExitCodes "*"
 
         Show-InstallationProgress -StatusMessage "creating README file with server settings on your desktop..."
         $content = @"
@@ -315,17 +321,13 @@ Server Administrator Password is: $adminPassword
 You can change these settings by editing the PalWorldSettings.ini file located here:
 $palSettingsPath
 
-You can launch the server by running "StartPalServer.bat" located here: $envUserDesktop
+You can launch the server by running "StartPalServer.bat" located here: $envUserDesktop\StartPalServer.bat
 
 You will need to create Port Forwards on your router for the following ports: 8211 and 25575
 "@
 
         # Write content to the text file
-        $content | Out-File -FilePath $outputFilePath -Encoding UTF8
-
-        # Display success message
-        Write-Host "PalWorld Server Configurations file created at: $outputFilePath"
-
+        $content | Out-File -FilePath $envUserDesktop\PalServerREADME.txt -Encoding UTF8
 
         ## Display a message at the end of the install
         If (-not $useDefaultMsi) {
